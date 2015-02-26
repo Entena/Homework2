@@ -1,6 +1,7 @@
 package entena.com.homework2;
 
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -40,18 +41,19 @@ public class MainActivity extends ActionBarActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        img = (ImageView) findViewById(R.id.imageView);
-        camBtn = (Button) findViewById(R.id.btnCamera);
+        if(savedInstanceState == null){
+            img = (ImageView) findViewById(R.id.imageView);
+            camBtn = (Button) findViewById(R.id.btnCamera);
+            progressBar = (ProgressBar) findViewById(R.id.progressBar);
+            progressBar.setVisibility(View.INVISIBLE);
+        }
         camBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 dispatchTakePictureIntent();
             }
         });
-        progressBar = (ProgressBar) findViewById(R.id.progressBar);
-        progressBar.setVisibility(View.INVISIBLE);
     }
-
 
     private void dispatchTakePictureIntent() {
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
@@ -95,31 +97,29 @@ public class MainActivity extends ActionBarActivity {
             super.finish();
             return true;
         }
-        if(id == R.id.grey){
-            ImageTask task = new ImageTask();
-            try {
-                //Bitmap bmp = task.execute("grey").get();
-                Log.e("THREADING", "BEGIN ASYNC");
+        ImageTask task = new ImageTask();
+        switch(id){
+            case R.id.grey:
+                Log.e("THREADING", "BEGIN GREY");
                 task.execute("grey");
-                //Log.e("THREADING", "GREY CONVERTED NOW SET");
-                //Log.e("THREADING", bmp.toString());
-                //img.setImageBitmap(bmp);
-            }catch (Exception e){
-                Log.e("THREADING", e.toString());
-            }
-        }
-        if(id == R.id.floyd){
-            //Call floyd
-        }
-        if(id == R.id.hokie){
-            //Call hokie filter
+                break;
+            case R.id.floyd:
+                Log.e("THREADING", "BEGIN FLOYD");
+                task.execute("floyd");
+                break;
+            case R.id.hokie:
+                Log.e("THREADING", "BEGIN HOKIE");
+                task.execute("hokie");
+                break;
+            default:
+                break;
         }
         return super.onOptionsItemSelected(item);
     }
 
 
 
-    private class ImageTask extends AsyncTask<String, Void, Bitmap> {
+    private class ImageTask extends AsyncTask<String, Integer, Bitmap> {
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
@@ -132,9 +132,13 @@ public class MainActivity extends ActionBarActivity {
                switch(mode){
                    case "grey":
                        Log.e("THREADING", "CALLING GREY CONVERSION");
-                       return greyScale();
-                   case "":
-
+                       return greyScale(true);
+                   case "floyd":
+                       Log.e("THREADING", "CALLING FLOYD CONVERSION");
+                       return floyd();
+                   case "hokie":
+                       Log.e("THREADING", "CALLING HOKIE CONVERSION");
+                       return hokie();
                    default:
                        Log.e("THREADING", "UNKNOWN MODE "+mode);
                        return null;
@@ -145,12 +149,12 @@ public class MainActivity extends ActionBarActivity {
             }
         }
 
-       protected void onProgressUpdate(int progress) {
+        protected void onProgressUpdate(Integer... progress) {
             super.onProgressUpdate();
-            if(progress % 10 == 0) {
-                Log.e("PROGRESS", "UPDATING " + progress);
-            }
-            progressBar.setProgress(progress);
+            /*if(progress[0] % 10 == 0) {
+                Log.e("PROGRESS", "UPDATING " + progress[0]);
+            }*/
+            progressBar.setProgress(progress[0]);
         }
 
         protected void onPostExecute(Bitmap result) {
@@ -163,9 +167,91 @@ public class MainActivity extends ActionBarActivity {
             }
         }
 
+        private Bitmap floyd(){
+            File file = new File(Environment.getExternalStorageDirectory(), "photo.jpg");
+            if(file.exists()) {
+                Bitmap myBitmap = greyScale(false);
+                //onProgressUpdate(1);
+                int imgWidth = myBitmap.getWidth();
+                int imgHeight = myBitmap.getHeight();
+                for(int y=imgHeight-1; y > -1; y--){
+                    for(int x=0; x < imgWidth; x++){
+                        int oldpixel = myBitmap.getPixel(x, y);
+                        int newpixel = getClosestPalette(oldpixel);
+                        myBitmap.setPixel(x, y, Color.argb(Color.alpha(oldpixel), newpixel, newpixel, newpixel));
+                        int quant_error = oldpixel - newpixel;
+                        int pixel;
+                        if(x+1 != imgWidth) {
+                            pixel = myBitmap.getPixel(x + 1, y);
+                            pixel = pixel + quant_error * (7 / 16);
+                            myBitmap.setPixel(x + 1, y, pixel);
+                        }
+                        if(x != 0 && y+1 != imgHeight) {
+                            pixel = myBitmap.getPixel(x - 1, y + 1);
+                            pixel = pixel + quant_error * (3 / 16);
+                            myBitmap.setPixel(x - 1, y + 1, pixel);
+                        }
+                        if(y+1 != imgHeight) {
+                            pixel = myBitmap.getPixel(x, y + 1);
+                            pixel = pixel + quant_error * (5 / 16);
+                            myBitmap.setPixel(x, y + 1, pixel);
+                        }
+                        if(x+1 != imgWidth && y+1 != imgHeight) {
+                            pixel = myBitmap.getPixel(x + 1, y + 1);
+                            pixel = pixel + quant_error * (1 / 16);
+                            myBitmap.setPixel(x + 1, y + 1, pixel);
+                        }
+                    }
+                    //Have to use doubles or less value is always zero
+                    double i = ((double) y/ (double) imgHeight) * 90;
+                    int prog = (int) i;//Cast double to int then pass to update progress bar
+                    publishProgress(100-prog);
+                }
+                return myBitmap;
+            } else {
+                return null;
+            }
+        }
 
+        private Bitmap hokie(){
+            File file = new File(Environment.getExternalStorageDirectory(), "photo.jpg");
+            if(file.exists()) {
+                Bitmap myBitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+                myBitmap = convertToMutable(myBitmap);
+                int imgWidth = myBitmap.getWidth();
+                int imgHeight = myBitmap.getHeight();
+                double i = .3;
+                double j = .7;
+                int orange = 17170456;
+                for(int x =0;x<imgWidth;x++) {
+                    for (int y = 0; y < imgHeight; y++) {
+                        int pix = myBitmap.getPixel(x, y);
+                        int orangeFilter = (int)new Color().rgb(255,102,0);
+                        int newColor = (int) (myBitmap.getPixel(x,y)*i + orangeFilter*j);
+                        myBitmap.setPixel(x, y, newColor);
+                    }
+                    double l = ((double) x / (double) imgWidth) * 100;
+                    int prog = (int) l;//Cast double to int then pass to update progress bar
+                    publishProgress(prog);
+                }
+                return myBitmap;
+            }
+            return null;//No image
+        }
 
-        private Bitmap greyScale(){
+        private int getClosestPalette(int pixel){
+            int R = Color.red(pixel);
+            int G = Color.green(pixel);
+            int B = Color.blue(pixel);
+            int col = (R+G+B)/3;
+            if(255-col > col){
+                return 0;
+            } else {
+                return 255;
+            }
+        }
+
+        private Bitmap greyScale(boolean indepent){
             File file = new File(Environment.getExternalStorageDirectory(), "photo.jpg");
             if(file.exists()){
                 Bitmap myBitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
@@ -182,10 +268,16 @@ public class MainActivity extends ActionBarActivity {
                         R = G = B = (int)((R+G+B)/3);
                         myBitmap.setPixel(x, y, Color.argb(A, R, G, B));
                     }
-                    //Have to use doubles or less value is always zero
-                    double i = ((double)x/(double)imgWidth)*100;
-                    int prog = (int) i;//Cast double to int then pass to update progress bar
-                    onProgressUpdate(prog);
+                    if(indepent) {//Only update progress if this is independent
+                        //Have to use doubles or less value is always zero
+                        double i = ((double) x / (double) imgWidth) * 100;
+                        int prog = (int) i;//Cast double to int then pass to update progress bar
+                        publishProgress(prog);
+                    } else {
+                        double i = ((double) x / (double) imgWidth) * 10;
+                        int prog = (int) i;//Cast double to int then pass to update progress bar
+                        publishProgress(prog);
+                    }
                 }
                 Log.e("THREADING", "Returning grey image "+myBitmap.toString());
                 return myBitmap;
