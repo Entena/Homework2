@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+
     <string name="app_name">Homework2</string>
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Quit</string>
     <string name="grey">Grey Scale</string>
     <string name="hokie">Hokie Filter</string>
     <string name="floyd">Floyd-Steinberg</string>
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+
 </resources>
